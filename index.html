@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSX KSE-100 Safe Withdrawal Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  h1 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: 0.82rem;
+    color: #94a3b8;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+
+  /* SCENARIO TABS */
+  .scenario-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+    user-select: none;
+  }
+  .tab.optimistic  { color: #34d399; }
+  .tab.optimistic.active  { background: rgba(52,211,153,0.13); border-color: #34d399; }
+  .tab.base        { color: #60a5fa; }
+  .tab.base.active        { background: rgba(96,165,250,0.13); border-color: #60a5fa; }
+  .tab.pessimistic { color: #f87171; }
+  .tab.pessimistic.active { background: rgba(248,113,113,0.13); border-color: #f87171; }
+  .tab.custom      { color: #c084fc; }
+  .tab.custom.active      { background: rgba(192,132,252,0.13); border-color: #c084fc; }
+
+  /* CONTROLS */
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    background: #1a2035;
+    border: 1px solid #2d3748;
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .control-group label {
+    display: block;
+    font-size: 0.7rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+  }
+  .control-group .val {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #60a5fa;
+    margin-bottom: 8px;
+  }
+  input[type=range] {
+    width: 100%;
+    accent-color: #3b82f6;
+    cursor: pointer;
+    height: 4px;
+  }
+  .range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.62rem;
+    color: #475569;
+    margin-top: 4px;
+  }
+
+  /* KPI CARDS */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: #1a2035;
+    border: 1px solid #2d3748;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card .clabel {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+  }
+  .card .cval {
+    font-size: 1.35rem;
+    font-weight: 900;
+    line-height: 1.2;
+  }
+  .card .csub {
+    font-size: 0.68rem;
+    color: #64748b;
+    margin-top: 4px;
+  }
+
+  /* CHARTS */
+  .chart-area {
+    background: #1a2035;
+    border: 1px solid #2d3748;
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .chart-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: #94a3b8;
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .legend-line {
+    width: 20px; height: 2px;
+    border-top: 2px dashed;
+    flex-shrink: 0;
+  }
+
+  /* ASSUMPTIONS */
+  .assumptions {
+    background: #1a2035;
+    border: 1px solid #2d3748;
+    border-left: 3px solid #3b82f6;
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 0.73rem;
+    color: #64748b;
+    line-height: 1.85;
+  }
+  .assumptions strong { color: #94a3b8; }
+  .warn {
+    color: #fbbf24;
+    font-size: 0.73rem;
+    margin-top: 10px;
+    display: block;
+    font-weight: 600;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 600px) {
+    body { padding: 14px; }
+    .card .cval { font-size: 1.1rem; }
+  }
+</style>
+</head>
+<body>
+
+<h1>🇵🇰 PSX KSE-100 — Safe Withdrawal Corpus Calculator</h1>
+<p class="subtitle">
+  How much do you need invested in the KSE-100 (dividends reinvested) to withdraw <strong style="color:#f8fafc">Rs 50,000/month</strong>
+  (Rs 600,000/yr) inflation-adjusted — potentially forever?<br>
+  Factors in Pakistan CPI inflation, rupee devaluation, and real KSE-100 returns across pessimistic / base / optimistic scenarios.
+</p>
+
+<!-- SCENARIO TABS -->
+<div class="scenario-tabs">
+  <div class="tab optimistic" id="tab-optimistic" onclick="setScenario('optimistic')">🟢 Optimistic</div>
+  <div class="tab base active" id="tab-base" onclick="setScenario('base')">🔵 Base Case</div>
+  <div class="tab pessimistic" id="tab-pessimistic" onclick="setScenario('pessimistic')">🔴 Pessimistic</div>
+  <div class="tab custom" id="tab-custom" onclick="setScenario('custom')">⚙️ Custom</div>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <div class="control-group">
+    <label>KSE-100 Total Return (Nominal, Annual)</label>
+    <div class="val" id="v-return">16.0%</div>
+    <input type="range" id="r-return" min="8" max="28" step="0.5" value="16" oninput="onSlider()">
+    <div class="range-labels"><span>8%</span><span>18% avg</span><span>28%</span></div>
+  </div>
+  <div class="control-group">
+    <label>Pakistan CPI Inflation (Annual)</label>
+    <div class="val" id="v-infl">10.0%</div>
+    <input type="range" id="r-infl" min="5" max="25" step="0.5" value="10" oninput="onSlider()">
+    <div class="range-labels"><span>5%</span><span>~10% 10yr avg</span><span>25%</span></div>
+  </div>
+  <div class="control-group">
+    <label>Safety Buffer / Sequence-of-Returns Risk</label>
+    <div class="val" id="v-buf">10%</div>
+    <input type="range" id="r-buf" min="0" max="30" step="1" value="10" oninput="onSlider()">
+    <div class="range-labels"><span>0% (none)</span><span>30% (conservative)</span></div>
+  </div>
+  <div class="control-group">
+    <label>Projection Horizon</label>
+    <div class="val" id="v-years">30 years</div>
+    <input type="range" id="r-years" min="10" max="50" step="5" value="30" oninput="onSlider()">
+    <div class="range-labels"><span>10 yrs</span><span>50 yrs</span></div>
+  </div>
+</div>
+
+<!-- KPI CARDS -->
+<div class="cards">
+  <div class="card">
+    <div class="clabel">Minimum Corpus Needed</div>
+    <div class="cval" id="c-corpus" style="color:#60a5fa">—</div>
+    <div class="csub" id="c-corpus-sub">perpetual withdrawal model</div>
+  </div>
+  <div class="card">
+    <div class="clabel">Real Return (After Inflation)</div>
+    <div class="cval" id="c-real" style="color:#f59e0b">—</div>
+    <div class="csub">KSE-100 nominal − CPI (Fisher eq.)</div>
+  </div>
+  <div class="card">
+    <div class="clabel">Safe Withdrawal Rate</div>
+    <div class="cval" id="c-swr" style="color:#34d399">—</div>
+    <div class="csub">real return ÷ (1 + buffer)</div>
+  </div>
+  <div class="card">
+    <div class="clabel">Year-1 Withdrawal</div>
+    <div class="cval" style="color:#e2e8f0">Rs 600k</div>
+    <div class="csub">= Rs 50,000/month target</div>
+  </div>
+  <div class="card">
+    <div class="clabel">Corpus @ End of Horizon</div>
+    <div class="cval" id="c-final" style="color:#c084fc">—</div>
+    <div class="csub" id="c-final-sub">nominal PKR remaining</div>
+  </div>
+  <div class="card">
+    <div class="clabel">Withdrawal in Year <span id="c-lastyrlabel">30</span></div>
+    <div class="cval" id="c-lastwd" style="color:#fb923c">—</div>
+    <div class="csub">after <span id="c-lastyrlabel2">30</span>yrs of inflation</div>
+  </div>
+</div>
+
+<!-- CHART 1: Portfolio over time -->
+<div class="chart-area">
+  <div class="chart-title">📈 Portfolio Balance &amp; Withdrawals Over Time (PKR, Nominal)</div>
+  <canvas id="chart1" height="200"></canvas>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#60a5fa"></div> Portfolio Balance</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div> Annual Withdrawal (Inflation-Adjusted)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#34d399; border-radius:0; height:2px; width:20px;"></div> Initial Corpus Required</div>
+  </div>
+</div>
+
+<!-- CHART 2: Scenario comparison bar chart -->
+<div class="chart-area">
+  <div class="chart-title">📊 Scenario Comparison — Required Starting Corpus (Rs Millions)</div>
+  <canvas id="chart2" height="200"></canvas>
+  <div class="legend" style="margin-top:10px;">
+    <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div> Optimistic: 21% return / 7% inflation / 5% buffer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#60a5fa"></div> Base: 16% return / 10% inflation / 10% buffer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div> Pessimistic: 11% return / 16% inflation / 15% buffer</div>
+  </div>
+</div>
+
+<!-- ASSUMPTIONS -->
+<div class="assumptions">
+  <strong>📚 Data Sources &amp; Assumptions</strong><br>
+  <strong>KSE-100 Returns:</strong> Total return index (dividends reinvested, adjusted for bonus &amp; rights issues). 30-yr CAGR ≈ <strong>14% nominal PKR</strong> (Topline Securities / Business Recorder, 2021). Recent decade (2011–2021) ≈ 14%. Bull decade (2001–2011) ≈ 25%. Pessimistic basis = bear cycle / post-MSCI demotion risk ≈ 10–12%.<br>
+  <strong>Pakistan CPI Inflation:</strong> Optimistic ~7% (IMF FY26 forecast, current trajectory post-tight monetary policy). Base ~10% (10-yr weighted average including 2022–24 spike to ~38%). Pessimistic ~16% (2022–24 peak era average). Source: Pakistan Bureau of Statistics, Trading Economics, IMF WEO Oct 2025.<br>
+  <strong>Withdrawal Model:</strong> Perpetual / endowment model. Corpus = Annual Withdrawal ÷ SWR. SWR = Real Return ÷ (1 + Safety Buffer). If real return &gt; SWR, portfolio grows indefinitely. Safety buffer accounts for: sequence-of-returns risk, index tracking costs, currency devaluation beyond CPI, bad years.<br>
+  <strong>Not modelled:</strong> Capital gains tax, 15% dividend withholding tax, index fund management fees (~0.5–1.5% p.a. in Pakistan), USD-denominated purchasing power erosion (PKR has depreciated ~10% per year vs USD over 20 yrs).
+  <span class="warn">⚠️ This is a financial illustration only — not investment advice. PSX returns are highly volatile year-to-year. Past performance does not guarantee future results. Please consult a SECP-licensed financial advisor before making investment decisions.</span>
+</div>
+
+<script>
+// -----------------------------------------------
+// SCENARIOS
+// -----------------------------------------------
+const SCENARIOS = {
+  optimistic:  { ret: 21,  infl: 7,  buf: 5  },
+  base:        { ret: 16,  infl: 10, buf: 10 },
+  pessimistic: { ret: 11,  infl: 16, buf: 15 },
+  custom:      null
+};
+
+let chart1Inst = null, chart2Inst = null;
+
+function pct(v) { return v / 100; }
+
+function calcMetrics(ret, infl, buf) {
+  const realRet = (1 + pct(ret)) / (1 + pct(infl)) - 1;
+  const swr = realRet / (1 + pct(buf));
+  const corpus = swr > 0.001 ? 600000 / swr : Infinity;
+  return { realRet, swr, corpus };
+}
+
+function projectPortfolio(corpus, ret, infl, years) {
+  let balance = corpus;
+  let wd = 600000;
+  const balances = [balance];
+  const withdrawals = [wd];
+  for (let y = 1; y <= years; y++) {
+    balance = balance * (1 + pct(ret)) - wd;
+    wd = wd * (1 + pct(infl));
+    balances.push(Math.max(0, balance));
+    withdrawals.push(wd);
+  }
+  return { balances, withdrawals };
+}
+
+function fmtRs(n) {
+  if (!isFinite(n) || n > 5e11) return '∞';
+  if (n >= 1e9) return 'Rs ' + (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return 'Rs ' + (n / 1e6).toFixed(1) + 'M';
+  return 'Rs ' + Math.round(n).toLocaleString();
+}
+function fmtM(n) {
+  if (!isFinite(n) || n > 5e11) return null;
+  return parseFloat((n / 1e6).toFixed(1));
+}
+function fmtPct(r) { return (r * 100).toFixed(2) + '%'; }
+
+function update() {
+  const ret   = parseFloat(document.getElementById('r-return').value);
+  const infl  = parseFloat(document.getElementById('r-infl').value);
+  const buf   = parseFloat(document.getElementById('r-buf').value);
+  const years = parseInt(document.getElementById('r-years').value);
+
+  document.getElementById('v-return').textContent = ret.toFixed(1) + '%';
+  document.getElementById('v-infl').textContent   = infl.toFixed(1) + '%';
+  document.getElementById('v-buf').textContent    = buf + '%';
+  document.getElementById('v-years').textContent  = years + ' years';
+  document.getElementById('c-lastyrlabel').textContent  = years;
+  document.getElementById('c-lastyrlabel2').textContent = years;
+
+  const { realRet, swr, corpus } = calcMetrics(ret, infl, buf);
+  const { balances, withdrawals } = projectPortfolio(corpus, ret, infl, years);
+
+  // Cards
+  document.getElementById('c-corpus').textContent = fmtRs(corpus);
+  document.getElementById('c-corpus-sub').textContent = 'Rs 600k/yr growing at ' + infl + '% p.a.';
+
+  const realPct = realRet * 100;
+  const realEl = document.getElementById('c-real');
+  realEl.textContent = realPct.toFixed(2) + '%';
+  realEl.style.color = realPct >= 0 ? '#f59e0b' : '#f87171';
+
+  const swrEl = document.getElementById('c-swr');
+  if (swr > 0.001) {
+    swrEl.textContent = fmtPct(swr);
+    swrEl.style.color = '#34d399';
+  } else {
+    swrEl.textContent = 'Negative!';
+    swrEl.style.color = '#f87171';
+  }
+
+  document.getElementById('c-final').textContent = fmtRs(balances[years]);
+  document.getElementById('c-final-sub').textContent = 'after ' + years + ' years nominal PKR';
+  document.getElementById('c-lastwd').textContent = fmtRs(withdrawals[years]);
+
+  // --- Chart 1 ---
+  const labels = Array.from({length: years + 1}, (_, i) => 'Y' + i);
+  const ctx1 = document.getElementById('chart1').getContext('2d');
+  if (chart1Inst) chart1Inst.destroy();
+  chart1Inst = new Chart(ctx1, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Portfolio Balance',
+          data: balances,
+          borderColor: '#60a5fa',
+          backgroundColor: 'rgba(96,165,250,0.07)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 2.5,
+        },
+        {
+          label: 'Annual Withdrawal',
+          data: withdrawals,
+          borderColor: '#f87171',
+          backgroundColor: 'transparent',
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 2,
+          borderDash: [5, 4],
+        },
+        {
+          label: 'Initial Corpus',
+          data: Array(years + 1).fill(corpus),
+          borderColor: '#34d399',
+          backgroundColor: 'transparent',
+          pointRadius: 0,
+          borderWidth: 1.5,
+          borderDash: [10, 5],
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 500 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          borderColor: '#334155',
+          borderWidth: 1,
+          titleColor: '#e2e8f0',
+          bodyColor: '#94a3b8',
+          callbacks: {
+            label: ctx => ' ' + ctx.dataset.label + ': ' + fmtRs(ctx.raw)
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#1e2a3a' },
+          ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 11 }
+        },
+        y: {
+          grid: { color: '#1e2a3a' },
+          ticks: {
+            color: '#64748b',
+            font: { size: 10 },
+            callback: v => fmtRs(v)
+          }
+        }
+      }
+    }
+  });
+
+  // --- Chart 2: Scenario Bars ---
+  const scenOrder = ['optimistic', 'base', 'pessimistic'];
+  const scenLabels = [
+    '🟢 Optimistic\n(21% ret / 7% infl / 5% buf)',
+    '🔵 Base Case\n(16% ret / 10% infl / 10% buf)',
+    '🔴 Pessimistic\n(11% ret / 16% infl / 15% buf)',
+  ];
+  const scenColors = ['rgba(52,211,153,0.75)', 'rgba(96,165,250,0.75)', 'rgba(248,113,113,0.75)'];
+  const scenBorder = ['#34d399', '#60a5fa', '#f87171'];
+  const scenData = scenOrder.map(sc => {
+    const s = SCENARIOS[sc];
+    const { corpus: c } = calcMetrics(s.ret, s.infl, s.buf);
+    return fmtM(c);
+  });
+
+  const ctx2 = document.getElementById('chart2').getContext('2d');
+  if (chart2Inst) chart2Inst.destroy();
+  chart2Inst = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: scenLabels,
+      datasets: [{
+        label: 'Corpus Required (Rs Millions)',
+        data: scenData,
+        backgroundColor: scenColors,
+        borderColor: scenBorder,
+        borderWidth: 2,
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 500 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          borderColor: '#334155',
+          borderWidth: 1,
+          callbacks: {
+            label: ctx => ' Rs ' + ctx.raw + ' Million required'
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#1e2a3a' },
+          ticks: { color: '#94a3b8', font: { size: 10 } }
+        },
+        y: {
+          grid: { color: '#1e2a3a' },
+          ticks: {
+            color: '#64748b',
+            font: { size: 10 },
+            callback: v => 'Rs ' + v + 'M'
+          },
+          title: {
+            display: true,
+            text: 'Required Corpus (Rs Millions)',
+            color: '#64748b',
+            font: { size: 10 }
+          }
+        }
+      }
+    }
+  });
+}
+
+function setScenario(name) {
+  ['optimistic', 'base', 'pessimistic', 'custom'].forEach(t => {
+    document.getElementById('tab-' + t).classList.remove('active');
+  });
+  document.getElementById('tab-' + name).classList.add('active');
+
+  if (name !== 'custom' && SCENARIOS[name]) {
+    const sc = SCENARIOS[name];
+    document.getElementById('r-return').value = sc.ret;
+    document.getElementById('r-infl').value   = sc.infl;
+    document.getElementById('r-buf').value    = sc.buf;
+  }
+  update();
+}
+
+function onSlider() {
+  // When user manually adjusts sliders → switch to Custom
+  ['optimistic', 'base', 'pessimistic'].forEach(t =>
+    document.getElementById('tab-' + t).classList.remove('active')
+  );
+  document.getElementById('tab-custom').classList.add('active');
+  update();
+}
+
+// Init
+setScenario('base');
+</script>
+</body>
+</html>
